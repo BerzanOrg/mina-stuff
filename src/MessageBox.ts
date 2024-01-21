@@ -1,11 +1,12 @@
 import { AccountUpdate, Bool, DeployArgs, Field, MerkleMap, MerkleMapWitness, MerkleTree, MerkleWitness, Permissions, Poseidon, Provable, PublicKey, Signature, SmartContract, State, UInt32, method, state } from "o1js";
 
+
 export class MessageBox extends SmartContract {
     @state(PublicKey) admin = State<PublicKey>()
-    @state(UInt32) countOfAddresses = State<UInt32>()
-    @state(UInt32) countOfMessages = State<UInt32>()
-    @state(Field) rootOfAddresses = State<Field>()
-    @state(Field) rootOfMessages = State<Field>()
+    @state(UInt32) addressCount = State<UInt32>()
+    @state(UInt32) messageCount = State<UInt32>()
+    @state(Field) addressesMapRoot = State<Field>()
+    @state(Field) messagesMapRoot = State<Field>()
 
     events = {
         MessageReceived: UInt32
@@ -21,65 +22,109 @@ export class MessageBox extends SmartContract {
     }
 
     init() {
+        // calling `super.init` method
         super.init()
+
+        // requiring that `this.sender` is one of the signers
         AccountUpdate.createSigned(this.sender)
 
+        // creating an empty merkle map
         const tree = new MerkleMap()
 
+        // setting states
         this.admin.set(this.sender)
-        this.countOfAddresses.set(UInt32.zero)
-        this.countOfMessages.set(UInt32.zero)
-        this.rootOfAddresses.set(tree.getRoot())
-        this.rootOfMessages.set(tree.getRoot())
+        this.addressCount.set(UInt32.zero)
+        this.messageCount.set(UInt32.zero)
+        this.addressesMapRoot.set(tree.getRoot())
+        this.messagesMapRoot.set(tree.getRoot())
     }
 
-    @method storeAddress(witneesOfAddress: MerkleMapWitness) {
+    @method storeAddress(addressWitness: MerkleMapWitness, address: PublicKey) {
+        // requiring that `this.sender` is one of the signers
         AccountUpdate.createSigned(this.sender)
 
+        // getting states
         const admin = this.admin.getAndRequireEquals()
-        const countOfAddresses = this.countOfAddresses.getAndRequireEquals()
-        const rootOfAddresses = this.rootOfAddresses.getAndRequireEquals()
+        const addressCount = this.addressCount.getAndRequireEquals()
+        const addressesMapRoot = this.addressesMapRoot.getAndRequireEquals()
 
-        const [computedRoot, addressToStore] = witneesOfAddress.computeRootAndKey(Field.empty())
+        // hashing address
+        const addressHash = Poseidon.hash(address.toFields())
 
-        rootOfAddresses.assertEquals(computedRoot)
+        // computing root with an empty value
+        const [computedAddressesMapRoot, computedAddressHash] = addressWitness.computeRootAndKey(Bool(false).toField())
+        addressHash.assertEquals(computedAddressHash)
+
+        // assertions
+        addressesMapRoot.assertEquals(computedAddressesMapRoot)
         admin.assertEquals(this.sender)
-        countOfAddresses.assertLessThanOrEqual(UInt32.from(100))
+        addressCount.assertLessThanOrEqual(UInt32.from(100))
 
-        const [newRoot] = witneesOfAddress.computeRootAndKey(Field.empty())
+        // computing root with a non-empty value
+        const [newAddressesMapRoot] = addressWitness.computeRootAndKey(Bool(true).toField())
 
-        this.rootOfAddresses.set(newRoot)
-        this.countOfAddresses.set(countOfAddresses.add(1))
+        // setting states
+        this.addressesMapRoot.set(newAddressesMapRoot)
+        this.addressCount.set(addressCount.add(1))
     }
 
-    @method depositMessage(witnessOfAddress: MerkleMapWitness, witnessOfMessages: MerkleMapWitness, message: Field) {
+    @method depositMessage(addressWitness: MerkleMapWitness, messageWitness: MerkleMapWitness, message: Field) {
+        // requiring that `this.sender` is one of the signers
         AccountUpdate.createSigned(this.sender)
 
-        const rootOfAddresses = this.rootOfAddresses.getAndRequireEquals()
-        const countOfMessages = this.countOfMessages.getAndRequireEquals()
+        // getting states
+        const messageCount = this.messageCount.getAndRequireEquals()
+        const addressesMapRoot = this.addressesMapRoot.getAndRequireEquals()
+        const messagesMapRoot = this.messagesMapRoot.getAndRequireEquals()
 
-        const [computedRoot, addressToStore] = witnessOfAddress.computeRootAndKey(Field.empty())
-        rootOfAddresses.assertEquals(computedRoot)
+        // hashing sender
+        const senderHash = Poseidon.hash(this.sender.toFields())
 
-        const hashOfSender = Poseidon.hash(this.sender.toFields())
-        addressToStore.assertEquals(hashOfSender)
+        // requires that the user is eligible
+        const [computedAddressesMapRoot, computedAddressHash] = addressWitness.computeRootAndKey(Bool(true).toField())
+        senderHash.assertEquals(computedAddressHash)
+        addressesMapRoot.assertEquals(computedAddressesMapRoot)
 
+        // requires that the user didn't deposit a message yet
+        const [computedMessagesMapRoot, computedDepositorHash] = messageWitness.computeRootAndKey(Bool(false).toField())
+        computedDepositorHash.assertEquals(senderHash)
+        computedMessagesMapRoot.assertEquals(messagesMapRoot)
+
+        // checking message flags
         const msg = message.toBits()
-        const flag1 = msg.at(-1)!
-        const flag2 = msg.at(-2)!
-        const flag3 = msg.at(-3)!
-        const flag4 = msg.at(-4)!
-        const flag5 = msg.at(-5)!
-        const flag6 = msg.at(-6)!
-
+        const flag1 = msg[249]
+        const flag2 = msg[250]
+        const flag3 = msg[251]
+        const flag4 = msg[252]
+        const flag5 = msg[253]
+        const flag6 = msg[254]
         Provable.if(flag1, flag2.or(flag3).or(flag4).or(flag5).or(flag6), Bool(false)).assertFalse()
-
         Provable.if(flag2, flag3, Bool(true)).assertTrue()
-
         Provable.if(flag4, flag5.or(flag6), Bool(false)).assertFalse()
 
-        this.emitEvent('MessageReceived', countOfMessages)
+        // emitting an event
+        this.emitEvent('MessageReceived', messageCount)
 
-        this.countOfMessages.set(countOfMessages.add(1))
+        // computing root with the message
+        const [newMessagesMapRoot] = messageWitness.computeRootAndKey(message)
+
+        // setting states
+        this.messagesMapRoot.set(newMessagesMapRoot)
+        this.messageCount.set(messageCount.add(1))
+    }
+
+    @method checkMessage(messageWitness: MerkleMapWitness, depositor: PublicKey, message: Field): Bool {
+        // getting state
+        const messagesMapRoot = this.messagesMapRoot.getAndRequireEquals()
+
+        // hashing depositor
+        const depositorHash = Poseidon.hash(depositor.toFields())
+
+        // computing root and key
+        const [computedMessagesMapRoot, computedDepositorHash] = messageWitness.computeRootAndKey(message)
+
+        // returning if given depositor has deposited given message
+        return messagesMapRoot.equals(computedMessagesMapRoot)
+            .and(depositorHash.equals(computedDepositorHash))
     }
 }
