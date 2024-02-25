@@ -2,7 +2,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "tsc && node --test build/*.test.js"
+    "test": "tsc && node --test"
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
