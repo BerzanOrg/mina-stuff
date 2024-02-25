@@ -1,22 +1,38 @@
-# mina-stuff
+# 🍊 Mina Stuff
 
-## Below are the software versions:
-- `node`: v20.20.0
-
-- `npm`: v10.3.0
-
-- `o1js`: v0.15.2
-
-## Install dependencies by running the command below: 
+The project is developed using [Node.js v20.20.0](https://nodejs.org/), [npm v10.3.0](https://docs.npmjs.com/) and [o1js v0.15.2](https://github.com/o1-labs/o1js).
 
 ```sh
-npm install
+git clone https://github.com/berzanorg/mina-stuff.git
 ```
 
-## Run tests by running the command below: 
+## 🚀 Project Structure
 
-```sh
-npm test
+Inside of the project, you'll see the following folders and files:
+
+```text
+/
+├── src/
+│   ├── MessageBox.test.ts
+│   ├── MessageBox.ts
+│   ├── SpyMaster.test.ts
+│   └── SpyMaster.ts
+└── package.json
 ```
 
-Made by [**Berzan**](https://berzan.org) with ❤️.
+Any smart contract, zk program and test can be placed in the `src/` directory.
+
+## 🧞 Commands
+
+All commands are run from the root of the project, from a terminal:
+
+| Command                                | Action                 |
+| :------------------------------------- | :--------------------- |
+| `npm install`                          | Installs dependencies  |
+| `npm test -- build/*.test.js`          | Runs all tests         |
+| `npm test -- build/MessageBox.test.js` | Runs message box tests |
+| `npm test -- build/SpyMaster.test.js`  | Runs spy master tests  |
+
+## 👨🏻‍🔬 Author
+
+The project is developed by [Berzan](https://berzan.org/) with his love, sweat, and tears.
